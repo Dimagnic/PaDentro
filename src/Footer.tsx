@@ -1,4 +1,4 @@
-import { BIZ, chatUrl, waLink } from './config'
+﻿import { BIZ, chatUrl, waLink } from './config'
 
 const I = ({ children }: { children: React.ReactNode }) => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
@@ -45,9 +45,10 @@ export default function Footer() {
 
         <div className="fbar">
           <span>© {new Date().getFullYear()} {BIZ.name}. Todos los derechos reservados.</span>
-          <span className="by">Diseñado por <a href="https://clienteai.site" target="_blank" rel="noopener" aria-label="Cero+"><img src="/cero-logo-dark.png" alt="Cero+" /></a></span>
+          <span className="by">Diseñado por <a href="https://cero-new-generation-e19z.vercel.app/" target="_blank" rel="noopener" aria-label="Cero+"><img src="/cero-logo-dark.png" alt="Cero+" /></a></span>
         </div>
       </div></footer>
     </>
   )
 }
+
