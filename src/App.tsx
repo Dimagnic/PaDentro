@@ -5,6 +5,7 @@ import { BIZ, waLink } from './config'
 import { CartDrawer, CartProvider, mxn, useCart } from './cart'
 import Menu from './Menu'
 import Photo from './Photo'
+import Footer from './Footer'
 
 const NAV = [['inicio', 'Inicio'], ['menu', 'Menú'], ['nosotros', 'Nosotros'], ['galeria', 'Galería'], ['ubicacion', 'Ubicación'], ['contacto', 'Contacto']]
 const find = (n: string) => (data as Category[]).flatMap(c => c.blocks.flatMap(b => b.items)).find(i => i.name.startsWith(n))!
@@ -143,23 +144,6 @@ function Location() {
       </div>
       <div className="map"><i className="pin" /><div><b>Pa'dentro</b><small>{BIZ.address}, {BIZ.city}</small></div></div>
     </div></section>
-  )
-}
-
-function Footer() {
-  return (
-    <>
-      <section className="cta-band" id="contacto"><div className="wrap">
-        <h2>Tu próximo antojo está a unos cuantos clics</h2>
-        <p>Explora la carta, elige tus favoritos y envíanos tu pedido directo por WhatsApp.</p>
-        <div className="cta"><a className="btn coral" href="#menu">Ver carta</a><a className="btn ghost" href={waLink()} target="_blank" rel="noopener">Pedir por WhatsApp</a></div>
-      </div></section>
-      <footer><div className="wrap foot">
-        <div><img src="/logo.png" alt={BIZ.name} className="logo" /><p>{BIZ.tagline}</p></div>
-        <ul>{NAV.map(([id, l]) => <li key={id}><a href={'#' + id}>{l}</a></li>)}</ul>
-        <div className="soc"><a href={BIZ.fb} target="_blank" rel="noopener">Facebook</a><a href={BIZ.ig} target="_blank" rel="noopener">Instagram</a></div>
-      </div><p className="copy wrap">© {new Date().getFullYear()} {BIZ.name} · Puebla</p></footer>
-    </>
   )
 }
 
