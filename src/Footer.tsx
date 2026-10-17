@@ -18,7 +18,7 @@ export default function Footer() {
       <footer className="ft"><div className="wrap">
         <div className="fgrid">
           <div className="fcol brand">
-            <img src="/logo.png" alt={BIZ.name} className="logo" />
+            <img src="/cero-logo.png" alt="Cero+" className="logo dev" />
             <p>{BIZ.tagline}.</p>
             <p className="addr">{BIZ.address}<br />{BIZ.city}</p>
             <a className="wa-line" href={waLink()} target="_blank" rel="noopener">WhatsApp: +52 {BIZ.phone}</a>
