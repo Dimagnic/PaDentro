@@ -47,7 +47,9 @@ export default function Footer() {
         <div className="fbar-row">
           <span>© {new Date().getFullYear()} {biz.name}</span>
           <button className="acceso" onClick={() => setLogin(true)}>Acceso administrador</button>
-          <span className="by">Diseñado por <a href="https://cero-new-generation-e19z.vercel.app/" target="_blank" rel="noopener" aria-label="Cero+"><img src="/cero-logo-dark.png" alt="Cero+" /></a></span>
+          <a className="by" href="https://cero-new-generation-e19z.vercel.app/" target="_blank" rel="noopener" title="Visitar el sitio de Cero+">
+            <span>Diseñado por</span><img src="/cero-logo-dark.png" alt="Cero+" />
+          </a>
         </div>
       </div>
       {login && <LoginModal onClose={() => setLogin(false)} />}

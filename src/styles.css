@@ -401,3 +401,8 @@ button,input,textarea,select{font:inherit;color:inherit}
 .cartbar{font-size:14px;gap:10px;white-space:nowrap}.cartbar b{padding:0 12px}
 .drawer{box-shadow:none;visibility:hidden;transition:transform .35s cubic-bezier(.2,.7,.2,1),visibility 0s .35s}
 .drawer.on{box-shadow:-20px 0 60px rgba(8,22,47,.25);visibility:visible;transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+/* Firma de Cero+: cápsula blanca para conservar los colores originales del logo */
+.by{display:inline-flex;align-items:center;gap:10px;background:#fff;border-radius:999px;padding:6px 16px 6px 14px;color:#4B5873;font-size:12px;font-weight:500;box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform .2s,box-shadow .2s}
+.by img{height:20px;width:auto}
+.by:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.35);color:var(--night)}
+.by:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
