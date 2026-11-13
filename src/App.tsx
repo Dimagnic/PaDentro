@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import Menu from './Menu'
 import Footer from './Footer'
 import Photo, { imgUrl } from './Photo'
@@ -36,7 +37,7 @@ function Nav() {
     <nav className={'nav' + (solid ? ' solid' : '') + (menuOpen ? ' open' : '')}>
       <div className="wrap bar">
         <a href="#inicio" className="brand-link"><img src="/logo.png" alt={site.biz.name} className="logo" /></a>
-        <ul onClick={() => setMenuOpen(false)}>
+        <ul>
           {NAV.filter(([id]) => id === 'inicio' || visible.has(id as SectionId)).map(([id, l]) => <li key={id}><a href={'#' + id}>{l}</a></li>)}
           <li><a href="/pedido">Seguir pedido</a></li>
         </ul>
@@ -46,11 +47,54 @@ function Nav() {
             <Icon name="bag" />{count > 0 && <i>{count}</i>}
           </button>
           <a className="btn gold sm hide-m" href="#menu">Ordenar</a>
-          <button className="ico-btn burger" onClick={() => setMenuOpen(o => !o)} aria-label="Menú" aria-expanded={menuOpen}><span /><span /></button>
+          <button className="ico-btn burger" onClick={() => setMenuOpen(true)} aria-label="Abrir menú" aria-expanded={menuOpen}><span /><span /><span /></button>
         </div>
       </div>
+      {menuOpen && <MobileMenu items={NAV.filter(([id]) => visible.has(id as SectionId))} onClose={() => setMenuOpen(false)} onLogin={() => { setMenuOpen(false); setLogin(true) }} />}
       {login && <LoginModal onClose={() => setLogin(false)} />}
     </nav>
+  )
+}
+
+/** Menú de pantalla completa para celulares. */
+function MobileMenu({ items, onClose, onLogin }: { items: [string, string][]; onClose: () => void; onLogin: () => void }) {
+  const { biz, store, socials } = useSite()
+  const { count, setOpen } = useCart()
+  const open = openNow(store.schedule)
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    addEventListener('keydown', esc)
+    return () => { document.body.style.overflow = prev; removeEventListener('keydown', esc) }
+  }, [onClose])
+  return createPortal(
+    <div className="mmenu" role="dialog" aria-modal="true" aria-label="Menú">
+      <div className="mmenu-top">
+        <img src="/logo.png" alt={biz.name} className="logo" />
+        <button className="ico-btn" onClick={onClose} aria-label="Cerrar menú"><Icon name="close" /></button>
+      </div>
+      <span className={'status ' + (open ? 'on' : 'off')}><i />{open ? `Abierto · cocina hasta ${timeLabel(store.schedule.close)}` : `Cerrado ahora · abrimos a las ${timeLabel(store.schedule.open)}`}</span>
+      <nav className="mmenu-links">
+        {items.map(([id, l]) => <a key={id} href={'#' + id} onClick={onClose}>{l}<Icon name="arrowR" size={18} /></a>)}
+        <a href="/pedido">Seguir mi pedido<Icon name="arrowR" size={18} /></a>
+      </nav>
+      <div className="mmenu-cta">
+        <a className="btn gold" href="#menu" onClick={onClose}>Ordenar en línea</a>
+        <button className="btn ghost" onClick={() => { onClose(); setOpen(true) }}><Icon name="bag" size={18} />Mi pedido{count > 0 ? ` (${count})` : ''}</button>
+      </div>
+      <div className="mmenu-info">
+        <a href={waLink()} target="_blank" rel="noopener"><Icon name="chat" size={18} />WhatsApp {biz.phone}</a>
+        <a href={biz.maps} target="_blank" rel="noopener"><Icon name="pin" size={18} />{biz.address}, Puebla</a>
+      </div>
+      <div className="mmenu-foot">
+        {socials.length > 0 && <div className="socs">{socials.map((s, i) => (
+          <a key={i} href={socialHref(s.network, s.url)} target="_blank" rel="noopener" aria-label={NETWORK_LABEL[s.network]}><Icon name={NETWORK_ICON[s.network]} size={18} /></a>
+        ))}</div>}
+        <button className="acceso" onClick={onLogin}>Acceso administrador</button>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
