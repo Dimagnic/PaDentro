@@ -4,6 +4,7 @@ import { waLink } from './config'
 import { CartDrawer, CartProvider, lineKey, mxn, useCart } from './cart'
 import { DataProvider, countItems, useData, useSite } from './data'
 import { PaymentResult } from './Payment'
+import LoginModal from './LoginModal'
 import Menu from './Menu'
 import Photo from './Photo'
 import Footer from './Footer'
@@ -22,6 +23,7 @@ const WA = 'M17.47 14.38c-.3-.15-1.76-.87-2.03-.97s-.47-.15-.67.15-.77.97-.94 1.
 function Nav() {
   const { count, setOpen } = useCart()
   const site = useSite()
+  const [login, setLogin] = useState(false)
   return (
     <nav className="nav"><div className="wrap bar">
       <a href="#inicio"><img src="/logo.png" alt={site.biz.name} className="logo" /></a>
@@ -30,8 +32,12 @@ function Nav() {
         <button className="bag" onClick={() => setOpen(true)} aria-label="Ver pedido">
           <Ico d="M7 4h10l1 4H6zM5 9h14l-1.2 11H6.2z" />{count > 0 && <i>{count}</i>}
         </button>
+        <button className="bag" onClick={() => setLogin(true)} aria-label="Acceso administrador" title="Acceso administrador">
+          <Ico d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" />
+        </button>
         <a className="btn coral sm" href="#menu">Ordenar en línea</a>
       </div>
+      {login && <LoginModal onClose={() => setLogin(false)} />}
     </div></nav>
   )
 }

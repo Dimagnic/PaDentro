@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from './supabase'
 
 /** Modal de acceso al panel. Si ya hay sesión de administrador, entra directo. */
@@ -30,7 +31,8 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
     location.href = '/admin'
   }
 
-  return (
+  // Portal al <body>: el menú superior usa backdrop-filter y atraparía un modal fijo.
+  return createPortal(
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" onClick={e => e.stopPropagation()} onSubmit={submit} aria-label="Acceso administrador">
         <button type="button" className="x" onClick={onClose} aria-label="Cerrar">✕</button>
@@ -41,6 +43,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
         {err && <p className="modal-err">{err}</p>}
         <button className="btn gold" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
       </form>
-    </div>
+    </div>,
+    document.body,
   )
 }
