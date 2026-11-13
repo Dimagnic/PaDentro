@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Line } from './types'
 import { waLink } from './config'
 import { supabase } from './supabase'
@@ -55,11 +55,14 @@ async function saveOrder(lines: Line[], note: string): Promise<{ folio: number; 
   return { folio: Number(data[0].folio), total: Number(data[0].total) }
 }
 
-/** Crea el pago en Stripe (función de servidor) y devuelve la URL de pago. */
-async function startCheckout(lines: Line[], f: { name: string; phone: string; pickup: string; note: string }): Promise<string> {
+/**
+ * Crea el pago en Stripe (función de servidor) y devuelve la URL de pago.
+ * El carrito solo manda productos y notas: Stripe pide tarjeta, nombre, teléfono y hora de recogida.
+ */
+async function startCheckout(lines: Line[], note: string): Promise<string> {
   const items = lines.map(l => ({ id: l.itemId, qty: l.qty, variant: l.variant === 'Botella' ? 'Botella' : null }))
   const { data, error } = await supabase!.functions.invoke('create-checkout', {
-    body: { items, name: f.name, phone: f.phone, pickup: f.pickup, notes: f.note },
+    body: { items, notes: note },
   })
   if (error) {
     let msg = 'No se pudo iniciar el pago. Intenta de nuevo o pide por WhatsApp.'
@@ -74,14 +77,14 @@ export function CartDrawer() {
   const { lines, total, open, setOpen, change, clear } = useCart()
   const { store } = useSite()
   const [note, setNote] = useState('')
-  const [mode, setMode] = useState<'cart' | 'pay'>('cart')
-  const [f, setF] = useState({ name: '', phone: '', pickup: 'Lo antes posible' })
   const [busy, setBusy] = useState(false)
+  const [paying, setPaying] = useState(false)
   const [err, setErr] = useState('')
 
   const canPayOnline = !!supabase && store.online && lines.length > 0 && lines.every(l => l.itemId != null)
-  useEffect(() => { if (!lines.length) setMode('cart') }, [lines.length])
   useEffect(() => { if (!open) setErr('') }, [open])
+  // Si el cliente regresa con el botón "atrás" desde Stripe, el botón vuelve a estar disponible.
+  useEffect(() => { const f = (e: PageTransitionEvent) => { if (e.persisted) setPaying(false) }; addEventListener('pageshow', f); return () => removeEventListener('pageshow', f) }, [])
 
   const msg = (folio?: number, tot = total) =>
     `Hola, quiero hacer este pedido en Pa'dentro${folio ? ` (folio #${folio})` : ''}:\n\n` +
@@ -100,15 +103,15 @@ export function CartDrawer() {
     if (saved) { clear(); setNote(''); setOpen(false) }
   }
 
-  const pay = async (e: FormEvent) => {
-    e.preventDefault()
-    if (busy) return
-    setBusy(true); setErr('')
+  /** Va directo al formulario oficial de Stripe. */
+  const pay = async () => {
+    if (paying || busy) return
+    setPaying(true); setErr('')
     try {
-      location.href = await startCheckout(lines, { ...f, note: note.trim() })
+      location.href = await startCheckout(lines, note.trim())
     } catch (x) {
       setErr(x instanceof Error ? x.message : 'No se pudo iniciar el pago.')
-      setBusy(false)
+      setPaying(false)
     }
   }
 
@@ -118,7 +121,7 @@ export function CartDrawer() {
       <aside className={'drawer' + (open ? ' on' : '')} aria-hidden={!open} aria-label="Tu pedido">
         <header>
           <div>
-            <h3>{mode === 'pay' ? 'Pagar y recoger' : 'Tu pedido'}</h3>
+            <h3>Tu pedido</h3>
             <small>{lines.length ? `${lines.length} producto(s)` : 'Sin productos'}</small>
           </div>
           <button className="x" onClick={() => setOpen(false)} aria-label="Cerrar">✕</button>
@@ -130,56 +133,36 @@ export function CartDrawer() {
             <p>Agrega tus platillos y bebidas favoritos de la carta para comenzar.</p>
             <a className="btn gold" href="#menu" onClick={() => setOpen(false)}>Ver carta</a>
           </div>
-        ) : mode === 'cart' ? (
+        ) : (
           <div className="lines">
             {lines.map(l => (
               <div className="line" key={l.key}>
-                <div><b>{l.name}</b>{l.variant && <em>{l.variant}</em>}<span>{mxn(l.price)}</span></div>
+                <div><b>{l.name}</b>{l.variant && <em>{l.variant}</em>}<span>{mxn(l.price)} c/u · {mxn(l.qty * l.price)}</span></div>
                 <div className="qty">
-                  <button onClick={() => change(l.key, -1)} aria-label="Quitar">−</button>
+                  <button onClick={() => change(l.key, -1)} aria-label="Quitar" disabled={paying}>−</button>
                   <i>{l.qty}</i>
-                  <button onClick={() => change(l.key, 1)} aria-label="Agregar">+</button>
+                  <button onClick={() => change(l.key, 1)} aria-label="Agregar" disabled={paying}>+</button>
                 </div>
               </div>
             ))}
             <textarea placeholder="Notas (sin cebolla, alergias…)" value={note} maxLength={500} onChange={e => setNote(e.target.value)} />
-            <button className="link" onClick={clear}>Vaciar pedido</button>
+            <button className="link" onClick={clear} disabled={paying}>Vaciar pedido</button>
           </div>
-        ) : (
-          <form id="payform" className="lines payform" onSubmit={pay}>
-            <p className="pickup">📍 Recoges en el local. {store.pickupNote}</p>
-            <label>Nombre<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required minLength={2} maxLength={80} autoComplete="name" /></label>
-            <label>WhatsApp / teléfono<input type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} required pattern="[0-9 +\-\(\)]{10,20}" title="10 dígitos" autoComplete="tel" placeholder="222 123 4567" /></label>
-            <label>¿Cuándo pasas?
-              <select value={f.pickup} onChange={e => setF({ ...f, pickup: e.target.value })}>
-                {['Lo antes posible', 'En 30 minutos', 'En 1 hora', 'En 2 horas'].map(o => <option key={o}>{o}</option>)}
-              </select>
-            </label>
-            <ul className="resume">{lines.map(l => <li key={l.key}><span>{l.qty}× {l.name}{l.variant ? ` (${l.variant})` : ''}</span><span>{mxn(l.qty * l.price)}</span></li>)}</ul>
-            {err && <p className="pay-err">{err}</p>}
-            <button type="button" className="link" onClick={() => setMode('cart')}>← Volver al pedido</button>
-          </form>
         )}
 
         <footer>
           <div className="tot"><span>TOTAL</span><b>{mxn(total)}</b></div>
-          {mode === 'cart' ? <>
-            {canPayOnline && (
-              <button className={'btn gold full' + (lines.length ? '' : ' off')} onClick={() => setMode('pay')} disabled={!lines.length}>
-                💳 Pagar en línea y recoger
-              </button>
-            )}
-            {!store.online && lines.length > 0 && <p className="closed">{store.closedMessage}</p>}
-            <button className={'btn wa' + (lines.length && !busy ? '' : ' off')} onClick={sendWhatsApp} disabled={!lines.length || busy}>
-              {busy ? 'Enviando…' : canPayOnline ? 'Pedir por WhatsApp (pagas en el local)' : 'Enviar pedido por WhatsApp'}
+          {err && <p className="pay-err">{err}</p>}
+          {canPayOnline && (
+            <button className={'btn gold full' + (paying ? ' off' : '')} onClick={pay} disabled={paying}>
+              {paying ? 'Abriendo pago seguro…' : `💳 Proceder al pago · ${mxn(total)}`}
             </button>
-            <p>Precios en MXN con IVA; propina voluntaria.</p>
-          </> : <>
-            <button form="payform" className={'btn gold full' + (busy ? ' off' : '')} disabled={busy}>
-              {busy ? 'Abriendo pago seguro…' : `Pagar ${mxn(total)} con tarjeta`}
-            </button>
-            <p>🔒 Pago seguro con Stripe. Pa'dentro no ve ni guarda los datos de tu tarjeta.</p>
-          </>}
+          )}
+          {!store.online && lines.length > 0 && <p className="closed">{store.closedMessage}</p>}
+          <button className={'btn wa' + (lines.length && !busy && !paying ? '' : ' off')} onClick={sendWhatsApp} disabled={!lines.length || busy || paying}>
+            {busy ? 'Enviando…' : canPayOnline ? 'Pedir por WhatsApp (pagas en el local)' : 'Enviar pedido por WhatsApp'}
+          </button>
+          <p>{canPayOnline ? `🔒 El pago se hace en Stripe, que te pedirá tus datos de tarjeta. Recoges en el local. ${store.pickupNote}` : 'Precios en MXN con IVA; propina voluntaria.'}</p>
         </footer>
       </aside>
     </>

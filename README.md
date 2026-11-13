@@ -11,6 +11,7 @@ Ejecuta en este orden, cada archivo completo:
 3. Crea tu usuario en **Authentication > Users > Add user > Create new user** (correo + contraseña, marca *Auto Confirm User*).
 4. `supabase/03_admin.sql`: cambia el correo por el tuyo y ejecútalo.
 5. `supabase/04_tienda_cms.sql`: agrega la tienda en línea, el CMS y el espacio para fotos.
+6. `supabase/05_checkout_directo.sql`: el pago va directo a Stripe (sin formulario en el carrito).
 
 Recomendado: en **Authentication > Sign In / Providers** desactiva *Allow new users to sign up*. Aunque alguien cree una cuenta, sin estar en la tabla `admins` no puede ver ni cambiar nada.
 
@@ -51,7 +52,7 @@ npm run build    # producción (dist/)
 
 ## Cómo funciona
 - **Carta y promociones** se leen de Supabase. Si Supabase no responde o faltan las variables, el sitio usa `src/menu.json` y sigue funcionando.
-- **Pago en línea:** el cliente llena nombre, teléfono y hora de recogida, y paga en Stripe. El servidor calcula el total (el navegador no puede cambiarlo). Stripe avisa a `stripe-webhook` y el pedido queda como pagado. Los pedidos sin pagar no aparecen en "Activos".
+- **Pago en línea:** el carrito muestra el resumen y "Proceder al pago" lleva directo a Stripe, que pide tarjeta, nombre, teléfono y hora de recogida. El servidor calcula el total (el navegador no puede cambiarlo). Stripe avisa a `stripe-webhook` y el pedido queda como pagado. Los pedidos sin pagar no aparecen en "Activos".
 - **Pedido por WhatsApp:** se guarda con folio y se abre WhatsApp; el cliente paga en el local.
 - **Botón "Acceso"** en el pie de página: abre el inicio de sesión del panel.
 - **Panel `/admin`:**

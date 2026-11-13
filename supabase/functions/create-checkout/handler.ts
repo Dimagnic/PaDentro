@@ -1,16 +1,13 @@
-import { adminDb, cors, env, json, stripeClient } from '../_shared/deps.ts'
+import { adminDb, cors, env, json, PICKUP, stripeClient } from '../_shared/deps.ts'
 
 interface Body {
   items: { id: number; qty: number; variant?: string | null }[]
-  name: string
-  phone: string
   notes?: string
-  pickup?: string
 }
 interface Line { name: string; variant: string | null; price: number; qty: number }
 
 // Mensajes de la base que sí se le pueden mostrar al cliente.
-const FRIENDLY = /(no disponible|sin precio|Cantidad inválida|vacío|cerrada|Falta el nombre|Teléfono inválido|mínimo)/i
+const FRIENDLY = /(no disponible|sin precio|Cantidad inválida|vacío|cerrada|mínimo)/i
 
 export async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -23,10 +20,10 @@ export async function handler(req: Request): Promise<Response> {
   const db = adminDb()
   const { data, error } = await db.rpc('create_online_order', {
     p_items: body.items.map(i => ({ id: i.id, qty: i.qty, variant: i.variant === 'Botella' ? 'Botella' : null })),
-    p_name: String(body.name ?? ''),
-    p_phone: String(body.phone ?? ''),
+    p_name: '',
+    p_phone: '',
     p_notes: String(body.notes ?? ''),
-    p_pickup: String(body.pickup ?? ''),
+    p_pickup: '',
   })
   if (error || !data?.[0]) {
     const msg = error?.message ?? ''
@@ -42,6 +39,13 @@ export async function handler(req: Request): Promise<Response> {
       payment_method_types: ['card'],
       locale: 'es-419',
       client_reference_id: order.id,
+      // Stripe pide los datos de contacto para recoger; el carrito ya no tiene formulario propio.
+      phone_number_collection: { enabled: true },
+      custom_fields: [
+        { key: 'nombre', label: { type: 'custom', custom: 'Nombre de quien recoge' }, type: 'text', text: { minimum_length: 2, maximum_length: 60 } },
+        { key: 'recoge', label: { type: 'custom', custom: '¿Cuándo pasas por tu pedido?' }, type: 'dropdown',
+          dropdown: { options: Object.entries(PICKUP).map(([value, label]) => ({ value, label })) } },
+      ],
       metadata: { order_id: order.id, folio: String(order.folio) },
       payment_intent_data: { description: `Pa'dentro · pedido #${order.folio}`, metadata: { order_id: order.id, folio: String(order.folio) } },
       line_items: order.lines.map(l => ({

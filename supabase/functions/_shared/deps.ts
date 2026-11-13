@@ -24,3 +24,8 @@ export const cors = {
 
 export const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+
+/** Opciones de recogida que muestra Stripe (value: solo letras/números). */
+export const PICKUP: Record<string, string> = {
+  asap: 'Lo antes posible', min30: 'En 30 minutos', h1: 'En 1 hora', h2: 'En 2 horas',
+}
