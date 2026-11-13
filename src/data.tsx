@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import raw from './menu.json'
 import type { Category, Promo } from './types'
 import { supabase } from './supabase'
@@ -67,20 +67,47 @@ async function fetchContent(): Promise<SiteContent | null> {
   return error || !data ? null : mergeContent(data.content)
 }
 
-interface Data { menu: Category[]; promos: Promo[]; site: SiteContent; live: boolean }
-const INITIAL: Data = { menu: LOCAL_MENU, promos: LOCAL_PROMOS, site: DEFAULT_CONTENT, live: false }
+interface Data { menu: Category[]; promos: Promo[]; site: SiteContent; live: boolean; ready: boolean }
+const INITIAL: Data = { menu: LOCAL_MENU, promos: LOCAL_PROMOS, site: DEFAULT_CONTENT, live: false, ready: !supabase }
 const D = createContext<Data>(INITIAL)
 export const useData = () => useContext(D)
 export const useSite = () => useContext(D).site
 
+/**
+ * Carga carta, promociones y contenido, y se suscribe a cambios en tiempo real:
+ * al presionar "Guardar" en el panel, las páginas abiertas se actualizan solas.
+ */
 export function DataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Data>(INITIAL)
+  const timers = useRef<Record<string, number>>({})
+
   useEffect(() => {
-    Promise.all([fetchMenu(), fetchPromos(), fetchContent()]).then(([menu, promos, site]) => {
-      if (site) setWhatsApp(site.biz.wa)
-      setState(s => ({ menu: menu ?? s.menu, promos: promos ?? s.promos, site: site ?? s.site, live: !!menu }))
+    const loadMenu = () => fetchMenu().then(menu => menu && setState(s => ({ ...s, menu, live: true })))
+    const loadPromos = () => fetchPromos().then(promos => promos && setState(s => ({ ...s, promos })))
+    const loadSite = () => fetchContent().then(site => {
+      if (site) { setWhatsApp(site.biz.wa); setState(s => ({ ...s, site })) }
     })
+    Promise.all([loadMenu(), loadPromos(), loadSite()]).finally(() => setState(s => ({ ...s, ready: true })))
+    if (!supabase) return
+
+    // Agrupa ráfagas de cambios (p. ej. al guardar varios productos) en una sola recarga.
+    const soon = (key: string, fn: () => void) => {
+      clearTimeout(timers.current[key])
+      timers.current[key] = window.setTimeout(fn, 300)
+    }
+    const ch = supabase.channel('sitio-publico')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_settings' }, () => soon('site', loadSite))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'promos' }, () => soon('promos', loadPromos))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, () => soon('menu', loadMenu))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_sections' }, () => soon('menu', loadMenu))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_categories' }, () => soon('menu', loadMenu))
+      .subscribe()
+    // Respaldo: al volver a la pestaña también se refresca.
+    const onFocus = () => { if (document.visibilityState === 'visible') { soon('site', loadSite); soon('menu', loadMenu); soon('promos', loadPromos) } }
+    document.addEventListener('visibilitychange', onFocus)
+    return () => { supabase!.removeChannel(ch); document.removeEventListener('visibilitychange', onFocus) }
   }, [])
+
   return <D.Provider value={state}>{children}</D.Provider>
 }
 

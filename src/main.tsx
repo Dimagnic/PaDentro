@@ -4,8 +4,11 @@ import App from './App'
 import './styles.css'
 
 const Admin = lazy(() => import('./admin/Admin'))
-const isAdmin = location.pathname.replace(/\/+$/, '') === '/admin'
+const Track = lazy(() => import('./Track'))
+const path = location.pathname.replace(/\/+$/, '')
 
 createRoot(document.getElementById('root')!).render(
-  isAdmin ? <Suspense fallback={null}><Admin /></Suspense> : <App />,
+  path === '/admin' ? <Suspense fallback={null}><Admin /></Suspense>
+  : path === '/pedido' ? <Suspense fallback={null}><Track /></Suspense>
+  : <App />,
 )

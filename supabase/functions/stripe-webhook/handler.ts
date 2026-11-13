@@ -1,14 +1,12 @@
-import { adminDb, env, PICKUP, Stripe, stripeClient } from '../_shared/deps.ts'
+import { adminDb, env, Stripe, stripeClient } from '../_shared/deps.ts'
 
 /** Datos de contacto que el cliente escribió en el formulario de Stripe. */
 function customer(s: Stripe.Checkout.Session) {
   const field = (k: string) => s.custom_fields?.find(f => f.key === k)
   const nombre = field('nombre')?.text?.value ?? ''
-  const recoge = field('recoge')?.dropdown?.value ?? ''
   return {
     customer_name: (nombre || s.customer_details?.name || '').slice(0, 80),
     customer_phone: (s.customer_details?.phone ?? '').slice(0, 20),
-    pickup_time: PICKUP[recoge] ?? '',
   }
 }
 
@@ -39,7 +37,10 @@ export async function handler(req: Request): Promise<Response> {
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded':
       if (s.payment_status === 'paid') {
-        patch = { payment_status: 'paid', paid_at: new Date().toISOString(), stripe_session_id: s.id, ...customer(s) }
+        patch = {
+          payment_status: 'paid', paid_at: new Date().toISOString(), stripe_session_id: s.id,
+          payment_method: 'stripe', amount_paid: (s.amount_total ?? 0) / 100, ...customer(s),
+        }
       }
       break
     case 'checkout.session.expired':

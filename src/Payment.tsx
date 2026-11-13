@@ -3,10 +3,11 @@ import { supabase } from './supabase'
 import { mxn, useCart } from './cart'
 import { useSite } from './data'
 import { waLink } from './config'
+import { formatWhen } from './content'
 
 type State =
   | { kind: 'checking' }
-  | { kind: 'paid'; folio: number; total: number }
+  | { kind: 'paid'; folio: number; total: number; code: string; when: string | null }
   | { kind: 'pending'; folio?: number }
   | { kind: 'cancelled' }
 
@@ -30,9 +31,9 @@ export function PaymentResult() {
     let tries = 0, alive = true
     const check = async () => {
       const { data } = await supabase!.rpc('order_payment_status', { p_session: session })
-      const row = data?.[0] as { folio: number; payment_status: string; total: number } | undefined
+      const row = data?.[0] as { folio: number; payment_status: string; total: number; tracking_code: string; scheduled_for: string | null } | undefined
       if (!alive) return
-      if (row?.payment_status === 'paid') return setSt({ kind: 'paid', folio: Number(row.folio), total: Number(row.total) })
+      if (row?.payment_status === 'paid') return setSt({ kind: 'paid', folio: Number(row.folio), total: Number(row.total), code: row.tracking_code, when: row.scheduled_for })
       if (++tries < 8) return void setTimeout(check, 2000)
       setSt({ kind: 'pending', folio: row ? Number(row.folio) : undefined })
     }
@@ -49,9 +50,12 @@ export function PaymentResult() {
         {st.kind === 'checking' && <><div className="big">⏳</div><h3>Confirmando tu pago…</h3><p>Esto toma solo unos segundos.</p></>}
         {st.kind === 'paid' && <>
           <div className="big">✅</div><h3>¡Pago recibido!</h3>
-          <p className="folio">Pedido <b>#{st.folio}</b> · {mxn(st.total)}</p>
+          <p className="folio">Pedido <b>#{st.folio}</b> por {mxn(st.total)}</p>
+          {st.when && <p>Recoges el <b>{formatWhen(st.when)}</b>.</p>}
           <p>{store.pickupNote}</p>
-          <a className="btn wa" href={waLink(`Hola, ya pagué en línea mi pedido #${st.folio}.`)} target="_blank" rel="noopener">Avisar por WhatsApp</a>
+          <p className="code">Tu código de seguimiento<b>{st.code}</b></p>
+          <a className="btn gold" href={`/pedido?c=${st.code}`}>Seguir mi pedido</a>
+          <a className="btn ghost-dk" href={waLink(`Hola, ya pagué en línea mi pedido #${st.folio} (código ${st.code}).`)} target="_blank" rel="noopener">Avisar por WhatsApp</a>
         </>}
         {st.kind === 'pending' && <>
           <div className="big">🕐</div><h3>Estamos confirmando tu pago</h3>

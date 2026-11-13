@@ -1,112 +1,159 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import Menu from './Menu'
+import Footer from './Footer'
+import Photo, { imgUrl } from './Photo'
 import type { Category, Item } from './types'
-import { waLink } from './config'
+import { ASSISTANT, waLink } from './config'
 import { CartDrawer, CartProvider, lineKey, mxn, useCart } from './cart'
 import { DataProvider, countItems, useData, useSite } from './data'
 import { PaymentResult } from './Payment'
 import LoginModal from './LoginModal'
-import Menu from './Menu'
-import Photo from './Photo'
-import Footer from './Footer'
+import Icon, { NETWORK_ICON, socialHref } from './icons'
+import { NETWORK_LABEL, openNow, timeLabel, type SectionId } from './content'
 
-const NAV = [['inicio', 'Inicio'], ['menu', 'Menú'], ['nosotros', 'Nosotros'], ['galeria', 'Galería'], ['ubicacion', 'Ubicación'], ['contacto', 'Contacto']]
 /** Busca un producto por el inicio de su nombre. Si ya no existe, la tarjeta simplemente no se muestra. */
 const find = (menu: Category[], n: string): { it: Item; blockId: string } | undefined => {
   for (const c of menu) for (const b of c.blocks) {
-    const it = b.items.find(i => i.name.startsWith(n))
+    const it = b.items.find(i => i.name.toLowerCase().startsWith(n.toLowerCase()))
     if (it) return { it, blockId: b.id }
   }
 }
-const Ico = ({ d }: { d: string }) => <svg viewBox="0 0 24 24" width="22" height="22"><path d={d} fill="currentColor" /></svg>
-const WA = 'M17.47 14.38c-.3-.15-1.76-.87-2.03-.97s-.47-.15-.67.15-.77.97-.94 1.16-.35.22-.64.07c-.3-.15-1.26-.46-2.39-1.47a9 9 0 0 1-1.65-2.06c-.17-.3 0-.46.13-.6l.45-.52c.15-.17.2-.3.3-.5s.05-.37-.02-.52-.67-1.61-.92-2.2c-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37s-1.04 1.02-1.04 2.48 1.07 2.88 1.21 3.07 2.1 3.2 5.08 4.49c.71.3 1.26.49 1.69.62.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2-1.41s.25-1.29.17-1.41-.27-.2-.57-.35M12.05 21.8a9.9 9.9 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1 8.37-15.14c2.64 0 5.12 1.03 6.99 2.9a9.8 9.8 0 0 1 2.89 7c0 5.44-4.43 9.87-9.88 9.87M20.46 3.49A11.8 11.8 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.9c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.9 11.9 0 0 0 5.69 1.45c6.55 0 11.89-5.34 11.89-11.9 0-3.18-1.24-6.17-3.48-8.41'
+
+/** Banda de azulejo de Talavera: el motivo de la casa. */
+export const Talavera = ({ className = '' }: { className?: string }) => <div className={'talavera ' + className} aria-hidden="true" />
+
+const NAV: [SectionId | 'inicio', string][] = [['menu', 'Carta'], ['casa', 'La casa'], ['nosotros', 'Horario'], ['galeria', 'Galería'], ['ubicacion', 'Ubicación']]
 
 function Nav() {
   const { count, setOpen } = useCart()
   const site = useSite()
   const [login, setLogin] = useState(false)
+  const [solid, setSolid] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => { const f = () => setSolid(scrollY > 40); f(); addEventListener('scroll', f, { passive: true }); return () => removeEventListener('scroll', f) }, [])
+  const visible = new Set(site.sections.filter(s => s.visible).map(s => s.id))
   return (
-    <nav className="nav"><div className="wrap bar">
-      <a href="#inicio"><img src="/logo.png" alt={site.biz.name} className="logo" /></a>
-      <ul>{NAV.map(([id, l]) => <li key={id}><a href={'#' + id}>{l}</a></li>)}</ul>
-      <div className="acts">
-        <button className="bag" onClick={() => setOpen(true)} aria-label="Ver pedido">
-          <Ico d="M7 4h10l1 4H6zM5 9h14l-1.2 11H6.2z" />{count > 0 && <i>{count}</i>}
-        </button>
-        <button className="bag" onClick={() => setLogin(true)} aria-label="Acceso administrador" title="Acceso administrador">
-          <Ico d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" />
-        </button>
-        <a className="btn coral sm" href="#menu">Ordenar en línea</a>
+    <nav className={'nav' + (solid ? ' solid' : '') + (menuOpen ? ' open' : '')}>
+      <div className="wrap bar">
+        <a href="#inicio" className="brand-link"><img src="/logo.png" alt={site.biz.name} className="logo" /></a>
+        <ul onClick={() => setMenuOpen(false)}>
+          {NAV.filter(([id]) => id === 'inicio' || visible.has(id as SectionId)).map(([id, l]) => <li key={id}><a href={'#' + id}>{l}</a></li>)}
+          <li><a href="/pedido">Seguir pedido</a></li>
+        </ul>
+        <div className="acts">
+          <button className="ico-btn" onClick={() => setLogin(true)} aria-label="Acceso administrador" title="Acceso administrador"><Icon name="user" /></button>
+          <button className="ico-btn" onClick={() => setOpen(true)} aria-label={`Ver pedido (${count})`}>
+            <Icon name="bag" />{count > 0 && <i>{count}</i>}
+          </button>
+          <a className="btn gold sm hide-m" href="#menu">Ordenar</a>
+          <button className="ico-btn burger" onClick={() => setMenuOpen(o => !o)} aria-label="Menú" aria-expanded={menuOpen}><span /><span /></button>
+        </div>
       </div>
       {login && <LoginModal onClose={() => setLogin(false)} />}
-    </div></nav>
+    </nav>
   )
 }
 
 function Hero() {
-  const { hero, biz } = useSite()
+  const { hero, biz, store, hours } = useSite()
+  const open = openNow(store.schedule)
+  const media = hero.media === 'video' && hero.video ? 'video' : 'image'
   return (
-    <header id="inicio" className="hero"><div className="wrap two">
-      <div>
-        <span className="eyebrow dark"><i />{hero.eyebrow}</span>
-        <h1>{hero.title} <em>{hero.highlight}</em></h1>
-        <p>{hero.text}</p>
-        <div className="cta">
-          <a className="btn coral" href="#menu">Ver carta y ordenar ↓</a>
-          <a className="btn ghost" href={waLink()} target="_blank" rel="noopener">Reservar por WhatsApp</a>
-        </div>
-        <small>{biz.days} · {biz.address}, Puebla</small>
+    <header id="inicio" className="hero">
+      <div className="hero-media" aria-hidden="true">
+        {media === 'video'
+          ? <video src={imgUrl(hero.video)} poster={hero.image ? imgUrl(hero.image) : undefined} autoPlay muted loop playsInline />
+          : <Photo src={hero.image} label="" className="fill" />}
       </div>
-      <Photo src={hero.image} label="Foto principal" className="tall" />
-    </div></header>
+      <div className="wrap hero-in">
+        <p className="hero-kicker">{hero.eyebrow}</p>
+        <h1>{hero.title}</h1>
+        <p className="hero-text">{hero.text}</p>
+        <div className="hero-cta">
+          <a className="btn gold" href="#menu">{hero.primary}</a>
+          <a className="btn ghost" href={waLink()} target="_blank" rel="noopener">{hero.secondary}</a>
+        </div>
+      </div>
+      <div className="hero-strip">
+        <div className="wrap strip-in">
+          <span className={'status ' + (open ? 'on' : 'off')}><i />{open ? `Abierto · cocina hasta ${timeLabel(store.schedule.close)}` : `Cerrado ahora · abrimos a las ${timeLabel(store.schedule.open)}`}</span>
+          <span><Icon name="pin" size={17} />{biz.address}, Puebla</span>
+          <span className="hide-m"><Icon name="clock" size={17} />{hours[0]?.value || biz.days}</span>
+          <a href="#menu" className="strip-link"><Icon name="calendar" size={17} />Programa tu pedido</a>
+        </div>
+      </div>
+      <Talavera />
+    </header>
   )
 }
 
 function Marquee() {
   const { marquee } = useSite()
+  if (!marquee.length) return null
   return (
-    <div className="marq"><div>{[0, 1].map(k => (
+    <div className="marq" aria-hidden="true"><div>{[0, 1].map(k => (
       <span key={k}>{marquee.map((t, i) => <b key={i}>{t}<s>✦</s></b>)}</span>
     ))}</div></div>
   )
 }
 
+const Sec = ({ id, className = '', children }: { id: string; className?: string; children: ReactNode }) =>
+  <section id={id} className={'sec ' + className}>{children}</section>
+
 function About() {
   const { menu } = useData()
   const { about } = useSite()
   return (
-    <section className="sec" id="casa"><div className="wrap two rev">
-      <Photo src={about.image} label="Nuestro espacio" />
+    <Sec id="casa"><div className="wrap split">
+      <div className="frame"><Photo src={about.image} label="Nuestro espacio" /></div>
       <div>
-        <span className="eyebrow"><i>01</i>La casa</span>
         <h2>{about.title}</h2>
         <p className="lead">{about.text}</p>
-        <div className="stats">
-          {about.stats.map((st, i) => <div key={i}><b>{st.value.replace('{productos}', String(countItems(menu)))}</b><span>{st.label}</span></div>)}
-        </div>
+        <dl className="stats">
+          {about.stats.map((st, i) => <div key={i}><dt>{st.value.replace('{productos}', String(countItems(menu)))}</dt><dd>{st.label}</dd></div>)}
+        </dl>
       </div>
-    </div></section>
+    </div></Sec>
   )
 }
 
 function Favs() {
-  const { add } = useCart()
+  const { add, setOpen } = useCart()
   const { menu } = useData()
   const { favorites } = useSite()
+  const cards = favorites.map(f => ({ f, hit: f.product ? find(menu, f.product) : undefined })).filter(x => x.hit)
+  if (!cards.length) return null
   return (
-    <section className="sec soft" id="favoritos"><div className="wrap">
-      <div className="head"><div><span className="eyebrow"><i>02</i>Especialidades</span><h2>Los favoritos de Pa'dentro</h2></div>
-        <p>Platillos y bebidas que nuestros clientes siempre quieren volver a pedir.</p></div>
-      <div className="cards3">
-        {favorites.map((f, i) => { const hit = f.product ? find(menu, f.product) : undefined; if (!hit) return null; const { it, blockId } = hit; const p = it.price; return (
+    <Sec id="favoritos" className="porcelain"><div className="wrap">
+      <div className="head"><h2>Los favoritos de la casa</h2><p>Lo que nuestros clientes vuelven a pedir.</p></div>
+      <div className="favs">
+        {cards.map(({ f, hit }, i) => { const { it, blockId } = hit!; const p = it.price; return (
           <article className="fav" key={i}>
-            <Photo src={f.image} label={f.tag} />{f.tag && <em>{f.tag}</em>}
-            <div><h3>{it.name}</h3><p>{f.text}</p>
-              <div className="row">{p != null && it.available
-                ? <><b className="pr">{mxn(p)}</b><button className="add" onClick={() => add({ key: lineKey(blockId, it.name, it.id), itemId: it.id, name: it.name, price: p })}>+ Agregar</button></>
-                : <span className="soon">{it.available ? it.label || 'Próximamente' : 'Agotado'}</span>}</div></div>
+            <Photo src={f.image} label={f.tag} />
+            <div className="fav-body">
+              {f.tag && <span className="tag">{f.tag}</span>}
+              <h3>{it.name}</h3><p>{f.text}</p>
+              <div className="fav-row">{p != null && it.available
+                ? <><b className="price">{mxn(p)}</b><button className="btn dk sm" onClick={() => { add({ key: lineKey(blockId, it.name, it.id), itemId: it.id, name: it.name, price: p }); setOpen(true) }}>Agregar</button></>
+                : <span className="soon">{it.available ? it.label || 'Próximamente' : 'Agotado'}</span>}</div>
+            </div>
           </article>) })}
       </div>
-    </div></section>
+    </div></Sec>
+  )
+}
+
+function Steps() {
+  const { steps } = useSite()
+  if (!steps.items.length) return null
+  return (
+    <Sec id="pasos" className="night tiled"><div className="wrap">
+      <h2>{steps.title}</h2>
+      <ol className="steps">
+        {steps.items.map((s, i) => <li key={i}><b>{i + 1}</b><h3>{s.title}</h3><p>{s.text}</p></li>)}
+      </ol>
+      <div className="steps-cta"><a className="btn gold" href="#menu">Empezar mi pedido</a><a className="btn ghost" href="/pedido">Ya tengo un código</a></div>
+    </div></Sec>
   )
 }
 
@@ -114,80 +161,141 @@ function Promos() {
   const { promos } = useData()
   if (!promos.length) return null
   return (
-    <section className="sec dark" id="promos"><div className="wrap">
-      <span className="eyebrow"><i>★</i>Promociones y eventos</span><h2>Celebra con nosotros</h2>
-      <div className={'cards3' + (promos.length === 2 ? ' two' : '')}>
+    <Sec id="promos"><div className="wrap">
+      <div className="head"><h2>Promociones y eventos</h2><p>Para celebrar con nosotros.</p></div>
+      <div className="promos">
         {promos.map(p => (
           <article className="promo" key={p.id ?? p.title}>
-            {p.label && <span>{p.label}</span>}<h3>{p.title}</h3><p>{p.description}</p>
-            {p.cta_text && <a className="btn ghost sm" href={waLink(p.cta_message || `Hola, me interesa: ${p.title}`)} target="_blank" rel="noopener">{p.cta_text}</a>}
+            {p.label && <span className="tag">{p.label}</span>}<h3>{p.title}</h3><p>{p.description}</p>
+            {p.cta_text && <a className="btn dk sm" href={waLink(p.cta_message || `Hola, me interesa: ${p.title}`)} target="_blank" rel="noopener">{p.cta_text}</a>}
           </article>
         ))}
       </div>
-    </div></section>
+    </div></Sec>
+  )
+}
+
+/** Convierte un enlace de YouTube en uno incrustable; otros enlaces se tratan como video directo. */
+const ytEmbed = (url: string) => {
+  const m = url.match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/)
+  return m ? `https://www.youtube-nocookie.com/embed/${m[1]}?rel=0` : null
+}
+function VideoSec() {
+  const { video } = useSite()
+  if (!video.url) return null
+  const yt = ytEmbed(video.url)
+  return (
+    <Sec id="video" className="porcelain"><div className="wrap">
+      <div className="head"><h2>{video.title}</h2>{video.text && <p>{video.text}</p>}</div>
+      <div className="video-box">
+        {yt ? <iframe src={yt} title={video.title} allow="encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
+            : <video src={imgUrl(video.url)} poster={video.poster ? imgUrl(video.poster) : undefined} controls playsInline preload="metadata" />}
+      </div>
+    </div></Sec>
   )
 }
 
 function Us() {
   const { us, hours, biz } = useSite()
   return (
-    <section className="sec dark" id="nosotros"><div className="wrap two">
+    <Sec id="nosotros" className="night tiled"><div className="wrap split top">
       <div>
-        <span className="eyebrow"><i>04</i>Nosotros</span>
         <h2>{us.title}</h2>
         <p className="lead">{us.text}</p>
-        <div className="feats">{us.features.map((f, i) => <div key={i}><span>{f.icon}</span><h4>{f.title}</h4><p>{f.text}</p></div>)}</div>
+        <div className="feats">{us.features.map((f, i) => <div key={i}><span>{f.icon}</span><h3>{f.title}</h3><p>{f.text}</p></div>)}</div>
       </div>
-      <aside className="hours"><h3>🕐 Te esperamos</h3>
-        {hours.map((h, i) => <div key={i}><span>{h.label}</span><span>{h.value}</span></div>)}
-        <p>Reservas: <a href={`tel:+${biz.wa.replace(/\D/g, '')}`}>{biz.phone}</a></p></aside>
-    </div></section>
+      <aside className="hours">
+        <h3>Horario</h3>
+        <dl>{hours.map((h, i) => <div key={i}><dt>{h.label}</dt><dd>{h.value}</dd></div>)}</dl>
+        <a className="hours-call" href={`tel:+${biz.wa.replace(/\D/g, '')}`}><Icon name="phone" size={18} />Reservaciones {biz.phone}</a>
+      </aside>
+    </div></Sec>
   )
 }
 
 function Gallery() {
   const { gallery } = useSite()
-  if (!gallery.length) return null
+  const pics = gallery.filter(Boolean).slice(0, 8)
+  if (!pics.length) return null
   return (
-    <section className="sec" id="galeria"><div className="wrap">
-      <div className="head"><div><span className="eyebrow"><i>05</i>Galería</span><h2>Lo que se vive en Pa'dentro</h2></div>
-        <p>Un vistazo a nuestro espacio y a quienes ya nos visitaron.</p></div>
-      <div className="gal">{gallery.slice(0, 5).map((g, i) => <Photo key={i} src={g} label="Foto" className={'g' + (i + 1)} />)}</div>
-    </div></section>
+    <Sec id="galeria"><div className="wrap">
+      <div className="head"><h2>Lo que se vive en Pa'dentro</h2><p>Nuestro espacio y quienes ya nos visitaron.</p></div>
+      <div className={'gal n' + pics.length}>{pics.map((g, i) => <Photo key={i} src={g} label="Pa'dentro" />)}</div>
+    </div></Sec>
   )
 }
 
 function Location() {
-  const { biz } = useSite()
+  const { biz, socials } = useSite()
   const q = encodeURIComponent(`${biz.address}, ${biz.city}`)
   return (
-    <section className="sec soft" id="ubicacion"><div className="wrap two">
+    <Sec id="ubicacion" className="porcelain"><div className="wrap split">
       <div>
-        <span className="eyebrow"><i>06</i>Ubicación</span><h2>Encuéntranos</h2>
-        <p className="lead">📍 {biz.address}, {biz.city}</p>
-        <a className="btn dk" href={biz.maps} target="_blank" rel="noopener">➤ Cómo llegar</a>
+        <h2>Encuéntranos</h2>
+        <address className="addr">{biz.address}<br />{biz.city}</address>
+        <ul className="contact">
+          <li><Icon name="phone" size={18} /><a href={`tel:+${biz.wa.replace(/\D/g, '')}`}>{biz.phone}</a></li>
+          <li><Icon name="chat" size={18} /><a href={waLink()} target="_blank" rel="noopener">WhatsApp</a></li>
+          {biz.email && <li><Icon name="mail" size={18} /><a href={`mailto:${biz.email}`}>{biz.email}</a></li>}
+        </ul>
+        <a className="btn dk" href={biz.maps} target="_blank" rel="noopener">Cómo llegar</a>
+        {socials.length > 0 && <div className="socs">{socials.map((s, i) => (
+          <a key={i} href={socialHref(s.network, s.url)} target="_blank" rel="noopener" aria-label={NETWORK_LABEL[s.network]} title={NETWORK_LABEL[s.network]}><Icon name={NETWORK_ICON[s.network]} /></a>
+        ))}</div>}
       </div>
       <iframe className="gmap" title={`Mapa: ${biz.name}`} src={`https://www.google.com/maps?q=${q}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+    </div></Sec>
+  )
+}
+
+function CtaBand() {
+  const { cta } = useSite()
+  return (
+    <section className="cta-band" id="contacto"><div className="wrap">
+      <h2>{cta.title}</h2><p>{cta.text}</p>
+      <div className="hero-cta"><a className="btn gold" href="#menu">Ordenar ahora</a><a className="btn ghost" href={waLink()} target="_blank" rel="noopener">Escribir por WhatsApp</a></div>
     </div></section>
   )
 }
 
+/** Botones flotantes configurables desde el CMS. */
 function Floaters() {
+  const { floating, biz } = useSite()
   const [up, setUp] = useState(false)
-  useEffect(() => { const f = () => setUp(scrollY > 600); addEventListener('scroll', f); return () => removeEventListener('scroll', f) }, [])
+  useEffect(() => { const f = () => setUp(scrollY > 700); addEventListener('scroll', f, { passive: true }); return () => removeEventListener('scroll', f) }, [])
+  // El asistente virtual se carga solo si está activo en el CMS.
+  useEffect(() => {
+    if (!floating.chat || document.getElementById('clienteai-widget')) return
+    const s = document.createElement('script')
+    s.id = 'clienteai-widget'; s.async = true; s.src = 'https://clienteai.site/widget.js'; s.dataset.token = ASSISTANT.token
+    document.body.appendChild(s)
+  }, [floating.chat])
+  return (
+    <div className={'floaters' + (floating.chat ? ' with-chat' : '')}>
+      {floating.top && <button className={'fl top' + (up ? ' on' : '')} onClick={() => scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Subir"><Icon name="up" /></button>}
+      {floating.call && <a className="fl call" href={`tel:+${biz.wa.replace(/\D/g, '')}`} aria-label="Llamar"><Icon name="phone" /></a>}
+      {floating.whatsapp && <a className="fl wa" href={waLink(floating.whatsappMessage)} target="_blank" rel="noopener" aria-label="WhatsApp"><Icon name="chat" size={26} /></a>}
+    </div>
+  )
+}
+
+const SECTIONS: Record<SectionId, () => ReactNode> = {
+  casa: () => <About />, favoritos: () => <Favs />, pasos: () => <Steps />, menu: () => <Menu />, promos: () => <Promos />,
+  video: () => <VideoSec />, nosotros: () => <Us />, galeria: () => <Gallery />, ubicacion: () => <Location />, cta: () => <CtaBand />,
+}
+
+function Page() {
+  const { sections } = useSite()
   return (
     <>
-      <button className={'top' + (up ? ' on' : '')} onClick={() => scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Subir">↑</button>
-      <a className="fab" href={waLink()} target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" width="30" height="30"><path d={WA} fill="#fff" /></svg></a>
+      <Nav /><Hero /><Marquee />
+      {sections.filter(s => s.visible).map(s => <div key={s.id} className="slot">{SECTIONS[s.id]()}</div>)}
+      <Footer />
+      <Floaters /><CartDrawer /><PaymentResult />
     </>
   )
 }
 
 export default function App() {
-  return (
-    <DataProvider><CartProvider>
-      <Nav /><Hero /><Marquee /><About /><Favs /><Menu /><Promos /><Us /><Gallery /><Location /><Footer />
-      <Floaters /><CartDrawer /><PaymentResult />
-    </CartProvider></DataProvider>
-  )
+  return <DataProvider><CartProvider><Page /></CartProvider></DataProvider>
 }

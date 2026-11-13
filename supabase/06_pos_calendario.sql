@@ -4,8 +4,8 @@
 -- =====================================================================
 
 -- ---------- Columnas nuevas de pedidos ----------
-alter table public.orders add column if not exists scheduled_for  timestamptz;
-alter table public.orders add column if not exists tracking_code  text;
+alter table public.orders add column if not exists scheduled_for  timestamptz;          -- fecha y hora para recoger (null = lo antes posible)
+alter table public.orders add column if not exists tracking_code  text;                 -- código público de seguimiento
 alter table public.orders add column if not exists status_history jsonb not null default '[]'::jsonb;
 alter table public.orders add column if not exists payment_method text not null default '';
 alter table public.orders add column if not exists amount_paid    numeric(10,2) not null default 0;
@@ -30,12 +30,14 @@ returns text language sql volatile as $$
   select upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
 $$;
 
+-- Los pedidos anteriores también reciben código e historial
 update public.orders set tracking_code = public.gen_tracking_code() where tracking_code is null;
 update public.orders set status_history = jsonb_build_array(jsonb_build_object('status', status, 'at', created_at))
 where status_history = '[]'::jsonb;
 update public.orders set amount_paid = total, payment_method = 'stripe'
 where payment_status = 'paid' and amount_paid = 0 and channel = 'online';
 
+-- Código, historial de estados y fecha de modificación automáticos
 create or replace function public.orders_track()
 returns trigger language plpgsql as $$
 begin
@@ -54,6 +56,7 @@ create trigger orders_track before insert or update on public.orders
 for each row execute function public.orders_track();
 
 -- ---------- Reglas de horario para pedidos programados ----------
+-- Se configuran en el panel (Sitio > Tienda). Valores por defecto si no hay nada guardado.
 create or replace function public.check_pickup(p_when timestamptz)
 returns void language plpgsql stable security definer set search_path = public as $$
 declare
@@ -67,7 +70,7 @@ begin
   close_t  := coalesce(nullif(cfg ->> 'close', ''), '20:00')::time;
   lead_min := coalesce((cfg ->> 'leadMinutes')::int, 45);
   max_days := coalesce((cfg ->> 'maxDays')::int, 30);
-  days     := coalesce(cfg -> 'days', '[0,2,3,4,5,6]'::jsonb);
+  days     := coalesce(cfg -> 'days', '[0,2,3,4,5,6]'::jsonb);   -- 0 = domingo … 6 = sábado
 
   if p_when < now() + make_interval(mins => lead_min) then
     raise exception 'Elige una hora con al menos % minutos de anticipación', lead_min;
@@ -84,7 +87,7 @@ begin
 end; $$;
 revoke all on function public.check_pickup(timestamptz) from public, anon, authenticated;
 
--- ---------- Pedido por WhatsApp ----------
+-- ---------- Pedido por WhatsApp (ahora con fecha opcional) ----------
 drop function if exists public.create_order(jsonb, text);
 create or replace function public.create_order(p_items jsonb, p_notes text default '', p_scheduled timestamptz default null)
 returns table (folio bigint, total numeric, tracking_code text)
@@ -102,7 +105,7 @@ end; $$;
 revoke all on function public.create_order(jsonb, text, timestamptz) from public;
 grant execute on function public.create_order(jsonb, text, timestamptz) to anon, authenticated;
 
--- ---------- Pedido pagado en línea ----------
+-- ---------- Pedido pagado en línea (ahora con fecha opcional) ----------
 drop function if exists public.create_online_order(jsonb, text, text, text, text);
 create or replace function public.create_online_order(
   p_items jsonb, p_name text default '', p_phone text default '', p_notes text default '',
@@ -136,7 +139,7 @@ as $$ select folio, payment_status, total, tracking_code, scheduled_for from pub
 revoke all on function public.order_payment_status(text) from public;
 grant execute on function public.order_payment_status(text) to anon, authenticated;
 
--- ---------- Seguimiento público del pedido ----------
+-- ---------- Seguimiento público del pedido (sin datos personales) ----------
 create or replace function public.track_order(p_code text)
 returns jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
@@ -158,6 +161,7 @@ create or replace function public.require_admin()
 returns void language plpgsql stable security definer set search_path = public as $$
 begin if not public.is_admin() then raise exception 'Solo administradores'; end if; end; $$;
 
+-- Venta en caja o pedido capturado por teléfono
 create or replace function public.pos_create_order(
   p_items jsonb, p_channel text default 'pos', p_customer_name text default '', p_customer_phone text default '',
   p_notes text default '', p_scheduled timestamptz default null, p_discount numeric default 0,
@@ -183,6 +187,7 @@ begin
   return query select o.id, o.folio, t, o.tracking_code;
 end; $$;
 
+-- Agregar productos a un pedido existente (el saldo queda pendiente si ya estaba pagado)
 create or replace function public.pos_add_items(p_order uuid, p_items jsonb)
 returns numeric language plpgsql security definer set search_path = public as $$
 declare pl record; o public.orders%rowtype; new_total numeric;
@@ -200,6 +205,7 @@ begin
   return new_total;
 end; $$;
 
+-- Quitar un renglón de un pedido (corrección)
 create or replace function public.pos_remove_line(p_order uuid, p_index int)
 returns numeric language plpgsql security definer set search_path = public as $$
 declare o public.orders%rowtype; new_items jsonb; new_total numeric;
@@ -216,6 +222,7 @@ begin
   return new_total;
 end; $$;
 
+-- Registrar un cobro en caja (por defecto, el saldo completo)
 create or replace function public.pos_register_payment(p_order uuid, p_method text, p_amount numeric default null)
 returns numeric language plpgsql security definer set search_path = public as $$
 declare o public.orders%rowtype; amt numeric; paid_now numeric;
@@ -245,7 +252,7 @@ grant execute on function public.pos_add_items(uuid, jsonb) to authenticated;
 grant execute on function public.pos_remove_line(uuid, int) to authenticated;
 grant execute on function public.pos_register_payment(uuid, text, numeric) to authenticated;
 
--- ---------- Tiempo real ----------
+-- ---------- Tiempo real: la página se actualiza al guardar ----------
 do $$
 declare t text;
 begin
