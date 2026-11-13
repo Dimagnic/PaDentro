@@ -102,3 +102,27 @@ h2{font-size:clamp(34px,4.6vw,52px);margin:10px 0 20px;color:var(--ink)}.dark h2
 @media(max-width:640px){.fgrid{grid-template-columns:1fr 1fr}.brand{grid-column:1/-1}.fgrid>.fcol:last-child{grid-column:1/-1}.fbar{flex-direction:column;align-items:flex-start;padding-bottom:110px}}
 .card.out{opacity:.55}.card.out .soon{color:#b4483c}
 button,input,textarea,select{font-family:inherit}
+/* Tienda en línea */
+.btn.full{width:100%;margin-bottom:10px}.btn.off,.btn:disabled{opacity:.6;pointer-events:none}
+.drawer footer .closed{background:#fbf3e2;color:#7a5a28;border-radius:10px;padding:10px 12px;font-size:13px!important;margin:0 0 10px!important}
+.payform{display:flex;flex-direction:column;gap:12px}
+.payform label{display:flex;flex-direction:column;gap:4px;font:700 12px Karla,system-ui,sans-serif;color:#51607a}
+.payform input,.payform select{font:inherit;font-size:15px;border:1px solid #e0d3b9;border-radius:10px;padding:10px 12px;color:var(--ink);background:#fff}
+.payform input:focus,.payform select:focus{outline:2px solid var(--gold);outline-offset:-1px}
+.pickup{background:#f6efe0;border-radius:10px;padding:10px 12px;margin:0;font-size:13px;color:#51607a}
+.resume{border-top:1px dashed #e0d3b9;padding-top:10px;font-size:13px;color:#51607a;display:flex;flex-direction:column;gap:4px}.resume li{display:flex;justify-content:space-between;gap:10px}
+.pay-err{background:#fdecea;color:#b4483c;border-radius:10px;padding:10px 12px;margin:0;font-size:13px;font-weight:700}
+/* Modales */
+.modal-bg{position:fixed;inset:0;z-index:90;background:rgba(7,20,46,.6);backdrop-filter:blur(4px);display:grid;place-items:center;padding:20px;animation:fadein .2s}
+.modal{position:relative;width:min(400px,100%);background:#fff;border-radius:20px;padding:34px 30px 30px;display:flex;flex-direction:column;gap:14px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.modal .x{position:absolute;top:14px;right:14px}.modal h3{font-size:26px}
+.modal label{display:flex;flex-direction:column;gap:4px;font:700 12px Karla,system-ui,sans-serif;color:#51607a}
+.modal input{font:inherit;font-size:15px;border:1px solid #e0d3b9;border-radius:10px;padding:11px 12px}
+.modal input:focus{outline:2px solid var(--gold);outline-offset:-1px}
+.modal-logo{height:40px;align-self:flex-start;filter:brightness(0) saturate(100%)}
+.modal-err{color:#b4483c;font-weight:700;margin:0;font-size:14px}
+.modal.center{text-align:center;align-items:center}.modal.center p{margin:0;color:#51607a}.modal .big{font-size:44px;line-height:1}
+.modal .folio{font-size:18px;color:var(--ink)!important}.modal .btn{width:100%}
+@keyframes fadein{from{opacity:0}}
+.acceso{background:none;border:0;padding:0;color:inherit;opacity:.55;cursor:pointer;font:inherit;text-decoration:underline}.acceso:hover{opacity:1}
+.gmap{width:100%;height:340px;border:0;border-radius:22px;box-shadow:0 12px 40px rgba(7,20,46,.1)}

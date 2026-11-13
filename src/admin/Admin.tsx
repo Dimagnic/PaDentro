@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../supabase'
-import { BIZ } from '../config'
+import { DEFAULT_CONTENT } from '../content'
+import SiteEditor from './SiteEditor'
+
+const BIZ = DEFAULT_CONTENT.biz
 import './admin.css'
 
 const sb = supabase!
@@ -64,70 +67,128 @@ function Login() {
 }
 
 function Panel({ email }: { email: string }) {
-  const [tab, setTab] = useState<'pedidos' | 'carta' | 'promos'>('pedidos')
+  type Tab = 'pedidos' | 'carta' | 'promos' | 'sitio'
+  const [tab, setTab] = useState<Tab>('pedidos')
+  const LABEL: Record<Tab, string> = { pedidos: 'Pedidos', carta: 'Carta', promos: 'Promociones', sitio: 'Sitio' }
   return (
     <div className="ad">
       <header className="ad-top">
         <a href="/"><img src="/logo.png" alt={BIZ.name} /></a>
-        <nav>{(['pedidos', 'carta', 'promos'] as const).map(t =>
-          <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'promos' ? 'Promociones' : t[0].toUpperCase() + t.slice(1)}</button>)}</nav>
+        <nav>{(Object.keys(LABEL) as Tab[]).map(t =>
+          <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{LABEL[t]}</button>)}</nav>
         <span className="ad-user">{email}<button onClick={() => sb.auth.signOut()}>Salir</button></span>
       </header>
       <main className="ad-main">
         {tab === 'pedidos' && <Orders />}
         {tab === 'carta' && <MenuEditor />}
         {tab === 'promos' && <PromosEditor />}
+        {tab === 'sitio' && <SiteEditor />}
       </main>
     </div>
   )
 }
 
 /* ---------------------------- Pedidos ----------------------------- */
-interface Order { id: string; folio: number; created_at: string; items: { name: string; variant: string | null; qty: number; subtotal: number }[]; total: number; notes: string; status: string }
+interface Order {
+  id: string; folio: number; created_at: string; total: number; notes: string; status: string
+  items: { name: string; variant: string | null; qty: number; subtotal: number }[]
+  channel: 'whatsapp' | 'online'; payment_status: 'none' | 'pending' | 'paid' | 'expired' | 'refunded'
+  customer_name: string; customer_phone: string; pickup_time: string
+}
+const PAY: Record<string, [string, string]> = {
+  paid: ['💳 Pagado en línea', 'paid'], pending: ['⏳ Esperando pago', 'pend'], expired: ['✕ Pago no completado', 'exp'],
+  refunded: ['↩ Reembolsado', 'exp'], none: ['💬 WhatsApp · paga en local', 'wa'],
+}
+/** Un pedido en línea solo cuenta (y se prepara) cuando ya está pagado. */
+const counts = (o: Order) => o.channel !== 'online' || o.payment_status === 'paid'
+
+function beep() {
+  try {
+    const ctx = new AudioContext(); const o = ctx.createOscillator(); const g = ctx.createGain()
+    o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.15
+    o.start(); o.frequency.setValueAtTime(660, ctx.currentTime + 0.15); o.stop(ctx.currentTime + 0.35)
+  } catch { /* sin audio */ }
+}
 
 function Orders() {
   const [rows, setRows] = useState<Order[]>([])
   const [filter, setFilter] = useState<string>('activos')
   const [err, setErr] = useState('')
+  const [sound, setSound] = useState(true)
+  const [seen] = useState(() => new Set<string>())
+  const [first, setFirst] = useState(true)
+
   const load = useCallback(async () => {
     const { data, error } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(200)
-    if (error) setErr(error.message); else { setErr(''); setRows(data as Order[]) }
-  }, [])
-  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t) }, [load])
+    if (error) return setErr(error.message)
+    setErr('')
+    const list = data as Order[]
+    const fresh = list.filter(o => counts(o) && o.status === 'nuevo' && !seen.has(o.id))
+    list.forEach(o => { if (counts(o)) seen.add(o.id) })
+    setRows(list)
+    setFirst(f => { if (!f && fresh.length && sound) beep(); return false })
+  }, [seen, sound])
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t) }, [load])
+
+  const nuevos = rows.filter(o => counts(o) && o.status === 'nuevo').length
+  useEffect(() => { document.title = (nuevos ? `(${nuevos}) ` : '') + 'Panel · Pa\'dentro' }, [nuevos])
 
   const setStatus = async (o: Order, status: string) => {
     setRows(r => r.map(x => (x.id === o.id ? { ...x, status } : x)))
     const { error } = await sb.from('orders').update({ status }).eq('id', o.id)
     if (error) { setErr(error.message); load() }
   }
-  const shown = rows.filter(o => filter === 'todos' ? true : filter === 'activos' ? !['entregado', 'cancelado'].includes(o.status) : o.status === filter)
+  const shown = rows.filter(o =>
+    filter === 'todos' ? true
+    : filter === 'activos' ? counts(o) && !['entregado', 'cancelado'].includes(o.status)
+    : filter === 'en línea' ? o.channel === 'online'
+    : filter === 'whatsapp' ? o.channel === 'whatsapp'
+    : o.status === filter)
   const today = new Date().toDateString()
-  const todays = rows.filter(o => new Date(o.created_at).toDateString() === today && o.status !== 'cancelado')
+  const todays = rows.filter(o => new Date(o.created_at).toDateString() === today && o.status !== 'cancelado' && counts(o))
+  const paidToday = todays.filter(o => o.payment_status === 'paid').reduce((a, o) => a + Number(o.total), 0)
 
   return (
     <section>
       <div className="ad-head">
-        <h2>Pedidos</h2>
-        <div className="ad-kpis"><span><b>{todays.length}</b> hoy</span><span><b>{money(todays.reduce((a, o) => a + Number(o.total), 0))}</b> vendidos hoy</span></div>
+        <h2>Pedidos {nuevos > 0 && <span className="ad-badge">{nuevos} nuevo{nuevos > 1 ? 's' : ''}</span>}</h2>
+        <div className="ad-kpis">
+          <span><b>{todays.length}</b> hoy</span>
+          <span><b>{money(todays.reduce((a, o) => a + Number(o.total), 0))}</b> en pedidos</span>
+          <span><b>{money(paidToday)}</b> cobrado en línea</span>
+        </div>
       </div>
       <div className="ad-bar">
-        {['activos', ...STATUS, 'todos'].map(s => <button key={s} className={filter === s ? 'on' : ''} onClick={() => setFilter(s)}>{s[0].toUpperCase() + s.slice(1)}</button>)}
+        {['activos', 'en línea', 'whatsapp', ...STATUS, 'todos'].map(s => <button key={s} className={filter === s ? 'on' : ''} onClick={() => setFilter(s)}>{s[0].toUpperCase() + s.slice(1)}</button>)}
+        <label className="ad-check" title="Sonar cuando llegue un pedido"><input type="checkbox" checked={sound} onChange={e => { setSound(e.target.checked); if (e.target.checked) beep() }} /> 🔔</label>
         <button className="ad-btn sm" onClick={load}>↻ Actualizar</button>
       </div>
       {err && <p className="ad-err">{err}</p>}
-      {shown.length === 0 && <p className="ad-muted">No hay pedidos en esta vista. Se actualiza solo cada 20 segundos.</p>}
+      {shown.length === 0 && <p className="ad-muted">{first ? 'Cargando…' : 'No hay pedidos en esta vista. Se actualiza solo cada 15 segundos.'}</p>}
       <div className="ad-orders">
-        {shown.map(o => (
-          <article key={o.id} className={'ad-order st-' + o.status}>
-            <header><b>#{o.folio}</b><time>{new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}</time></header>
-            <ul>{o.items.map((l, k) => <li key={k}><span>{l.qty}× {l.name}{l.variant ? ` (${l.variant})` : ''}</span><span>{money(l.subtotal)}</span></li>)}</ul>
-            {o.notes && <p className="ad-note">📝 {o.notes}</p>}
-            <footer>
-              <b>{money(o.total)}</b>
-              <select value={o.status} onChange={e => setStatus(o, e.target.value)}>{STATUS.map(s => <option key={s}>{s}</option>)}</select>
-            </footer>
-          </article>
-        ))}
+        {shown.map(o => {
+          const [payLabel, payCls] = PAY[o.payment_status] ?? PAY.none
+          const tel = o.customer_phone.replace(/\D/g, '')
+          return (
+            <article key={o.id} className={'ad-order st-' + o.status}>
+              <header><b>#{o.folio}</b><time>{new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}</time></header>
+              <span className={'ad-pay ' + payCls}>{payLabel}</span>
+              {o.customer_name && (
+                <div className="ad-cust">
+                  <b>{o.customer_name}</b>
+                  {tel && <a href={`https://wa.me/${tel.length === 10 ? '52' + tel : tel}?text=${encodeURIComponent(`Hola ${o.customer_name}, tu pedido #${o.folio} de Pa'dentro está listo para recoger.`)}`} target="_blank" rel="noopener">💬 {o.customer_phone}</a>}
+                  {o.pickup_time && <small>Recoge: {o.pickup_time}</small>}
+                </div>
+              )}
+              <ul>{o.items.map((l, k) => <li key={k}><span>{l.qty}× {l.name}{l.variant ? ` (${l.variant})` : ''}</span><span>{money(l.subtotal)}</span></li>)}</ul>
+              {o.notes && <p className="ad-note">📝 {o.notes}</p>}
+              <footer>
+                <b>{money(o.total)}</b>
+                <select value={o.status} onChange={e => setStatus(o, e.target.value)}>{STATUS.map(s => <option key={s}>{s}</option>)}</select>
+              </footer>
+            </article>
+          )
+        })}
       </div>
     </section>
   )

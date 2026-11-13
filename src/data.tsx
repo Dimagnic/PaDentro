@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import raw from './menu.json'
 import type { Category, Promo } from './types'
 import { supabase } from './supabase'
+import { DEFAULT_CONTENT, mergeContent, type SiteContent } from './content'
+import { setWhatsApp } from './config'
 
 const num = (s: string) => Number(s.replace(/,/g, ''))
 
@@ -59,15 +61,25 @@ async function fetchPromos(): Promise<Promo[] | null> {
   return error ? null : data
 }
 
-interface Data { menu: Category[]; promos: Promo[]; live: boolean }
-const D = createContext<Data>({ menu: LOCAL_MENU, promos: LOCAL_PROMOS, live: false })
+async function fetchContent(): Promise<SiteContent | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.from('site_settings').select('content').eq('id', 1).maybeSingle()
+  return error || !data ? null : mergeContent(data.content)
+}
+
+interface Data { menu: Category[]; promos: Promo[]; site: SiteContent; live: boolean }
+const INITIAL: Data = { menu: LOCAL_MENU, promos: LOCAL_PROMOS, site: DEFAULT_CONTENT, live: false }
+const D = createContext<Data>(INITIAL)
 export const useData = () => useContext(D)
+export const useSite = () => useContext(D).site
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<Data>({ menu: LOCAL_MENU, promos: LOCAL_PROMOS, live: false })
+  const [state, setState] = useState<Data>(INITIAL)
   useEffect(() => {
-    Promise.all([fetchMenu(), fetchPromos()]).then(([menu, promos]) =>
-      setState(s => ({ menu: menu ?? s.menu, promos: promos ?? s.promos, live: !!menu })))
+    Promise.all([fetchMenu(), fetchPromos(), fetchContent()]).then(([menu, promos, site]) => {
+      if (site) setWhatsApp(site.biz.wa)
+      setState(s => ({ menu: menu ?? s.menu, promos: promos ?? s.promos, site: site ?? s.site, live: !!menu }))
+    })
   }, [])
   return <D.Provider value={state}>{children}</D.Provider>
 }
