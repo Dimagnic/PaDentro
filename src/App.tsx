@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
-import data from './menu.json'
-import type { Category } from './types'
+import type { Category, Item } from './types'
 import { BIZ, waLink } from './config'
-import { CartDrawer, CartProvider, mxn, useCart } from './cart'
+import { CartDrawer, CartProvider, lineKey, mxn, useCart } from './cart'
+import { DataProvider, countItems, useData } from './data'
 import Menu from './Menu'
 import Photo from './Photo'
 import Footer from './Footer'
 
 const NAV = [['inicio', 'Inicio'], ['menu', 'Menú'], ['nosotros', 'Nosotros'], ['galeria', 'Galería'], ['ubicacion', 'Ubicación'], ['contacto', 'Contacto']]
-const find = (n: string) => (data as Category[]).flatMap(c => c.blocks.flatMap(b => b.items)).find(i => i.name.startsWith(n))!
-const total = (data as Category[]).reduce((a, c) => a + c.blocks.reduce((x, b) => x + b.items.length, 0), 0)
+/** Busca un producto por el inicio de su nombre. Si ya no existe, la tarjeta simplemente no se muestra. */
+const find = (menu: Category[], n: string): { it: Item; blockId: string } | undefined => {
+  for (const c of menu) for (const b of c.blocks) {
+    const it = b.items.find(i => i.name.startsWith(n))
+    if (it) return { it, blockId: b.id }
+  }
+}
 const FAV = [
   { n: 'Mole poblano con guajolote', tag: 'Mesa Poblana', d: 'Nuestro mole poblano con guajolote o pollo, 200 g.', img: 'fav-mole.jpg' },
   { n: 'Chile en nogada', tag: 'De temporada', d: 'Platillo de temporada, una pieza. No participa en el beneficio Mesa Poblana.', img: 'fav-nogada.jpg' },
@@ -59,6 +64,7 @@ const Marquee = () => (
 )
 
 function About() {
+  const { menu } = useData()
   return (
     <section className="sec" id="casa"><div className="wrap two rev">
       <Photo src="casa.jpg" label="Nuestro espacio" />
@@ -67,7 +73,7 @@ function About() {
         <h2>El sabor que siempre quieres volver a probar</h2>
         <p className="lead">En Pa'dentro reunimos la cocina poblana, la cantina y el buen mezcal en un solo lugar. Beneficio de la casa: disfruta Mesa Poblana sin costo al acumular $350 o más por persona en bebidas y/o postres.</p>
         <div className="stats">
-          <div><b>{total}</b><span>productos en carta</span></div>
+          <div><b>{countItems(menu)}</b><span>productos en carta</span></div>
           <div><b>$350</b><span>activan Mesa Poblana</span></div>
           <div><b>6 días</b><span>abiertos a la semana</span></div>
         </div>
@@ -78,16 +84,19 @@ function About() {
 
 function Favs() {
   const { add } = useCart()
+  const { menu } = useData()
   return (
     <section className="sec soft" id="favoritos"><div className="wrap">
       <div className="head"><div><span className="eyebrow"><i>02</i>Especialidades</span><h2>Los favoritos de Pa'dentro</h2></div>
         <p>Platillos y bebidas que nuestros clientes siempre quieren volver a pedir.</p></div>
       <div className="cards3">
-        {FAV.map(f => { const it = find(f.n); const p = Number(it.price.replace(/,/g, '').split('/')[0]); return (
+        {FAV.map(f => { const hit = find(menu, f.n); if (!hit) return null; const { it, blockId } = hit; const p = it.price; return (
           <article className="fav" key={f.n}>
             <Photo src={f.img} label={f.tag} /><em>{f.tag}</em>
             <div><h3>{it.name}</h3><p>{f.d}</p>
-              <div className="row"><b className="pr">{mxn(p)}</b><button className="add" onClick={() => add(it.name, p)}>+ Agregar</button></div></div>
+              <div className="row">{p != null && it.available
+                ? <><b className="pr">{mxn(p)}</b><button className="add" onClick={() => add({ key: lineKey(blockId, it.name, it.id), itemId: it.id, name: it.name, price: p })}>+ Agregar</button></>
+                : <span className="soon">{it.available ? it.label || 'Próximamente' : 'Agotado'}</span>}</div></div>
           </article>) })}
       </div>
     </div></section>
@@ -95,13 +104,18 @@ function Favs() {
 }
 
 function Promos() {
+  const { promos } = useData()
+  if (!promos.length) return null
   return (
     <section className="sec dark" id="promos"><div className="wrap">
       <span className="eyebrow"><i>★</i>Promociones y eventos</span><h2>Celebra con nosotros</h2>
-      <div className="cards3 two">
-        <article className="promo"><span>Jueves y viernes</span><h3>De Bandidas</h3><p>Toda la coctelería al 2x1.</p></article>
-        <article className="promo"><span>17 de octubre</span><h3>Cena Maridaje</h3><p>Pa'dentro y mezcal: entre maíz, fuego y agave. Recepción 4:30 pm, inicio 5:00 pm.</p>
-          <a className="btn ghost sm" href={waLink('Hola, quiero reservar para la Cena Maridaje del 17 de octubre')} target="_blank" rel="noopener">Reservar lugar</a></article>
+      <div className={'cards3' + (promos.length === 2 ? ' two' : '')}>
+        {promos.map(p => (
+          <article className="promo" key={p.id ?? p.title}>
+            {p.label && <span>{p.label}</span>}<h3>{p.title}</h3><p>{p.description}</p>
+            {p.cta_text && <a className="btn ghost sm" href={waLink(p.cta_message || `Hola, me interesa: ${p.title}`)} target="_blank" rel="noopener">{p.cta_text}</a>}
+          </article>
+        ))}
       </div>
     </div></section>
   )
@@ -160,9 +174,9 @@ function Floaters() {
 
 export default function App() {
   return (
-    <CartProvider>
+    <DataProvider><CartProvider>
       <Nav /><Hero /><Marquee /><About /><Favs /><Menu /><Promos /><Us /><Gallery /><Location /><Footer />
       <Floaters /><CartDrawer />
-    </CartProvider>
+    </CartProvider></DataProvider>
   )
 }
